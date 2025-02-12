@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddDbContext<UserContext>(options => options.UseSqlite("Data Source=BakeMart.db"));
+builder.Services.AddMemoryCache();
 
 var app = builder.Build();
 

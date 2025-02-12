@@ -2,39 +2,65 @@ using BakeMart.Data;
 using BakeMart.Dtos.UserDtos;
 using BakeMart.Entities;
 using BakeMart.Mapping;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace BakeMart.Endpoints;
 
-public static class UserEnpoints{
+public static class UserEndpoints
+{
+    const string GetUserById = "GetUserById";
+    const string CreateUser = "CreateUser";
+    const string UsersCacheKey = "users_list"; 
+    public static RouteGroupBuilder MapUserEndpoints(this WebApplication app)
+    {
+        var group = app.MapGroup("users");
 
-   const string GetUserbyId = "GetUserbyId";
-   const string CreateUser = "CreateUser";
+        group.MapGet("/{id}", (int id, UserContext dbContext, IMemoryCache cache) =>
+        {
+            string cacheKey = $"user_{id}";
 
-   public static RouteGroupBuilder MapUserEndpoints(this WebApplication app){
+            if (!cache.TryGetValue(cacheKey, out User? user))
+            {
+                user = dbContext.Users.Find(id);
+                if (user is null) return Results.NotFound();
 
-      var group = app.MapGroup("users");
+                var cacheOptions = new MemoryCacheEntryOptions()
+                    .SetAbsoluteExpiration(TimeSpan.FromMinutes(10));
 
-      group.MapGet("/{id}", (int id, UserContext dbContext) =>{
-         var user = dbContext.Users.Find(id);
-         return user is not null ? Results.Ok(user) : Results.NotFound();
-      }).WithName("GetUser");
+                cache.Set(cacheKey, user, cacheOptions);
+            }
 
-      group.MapPost("/create", (CreateUserDto newUser, UserContext dbContext) => {
-         User user = newUser.ToEntity();
-         dbContext.Users.Add(user);
-         dbContext.SaveChanges();
-         return Results.Created($"/users/{user.Id}", user);
-      });
+            return Results.Ok(user);
+        }).WithName(GetUserById);
 
-      group.MapDelete("/{id}", (int id, UserContext dbContext) => {
-         var user = dbContext.Users.Find(id);
-         if(user is null) return Results.NotFound();
-         dbContext.Users.Remove(user);
-         dbContext.SaveChanges();
-         return Results.NoContent();
-      });
+        group.MapPost("/create", (CreateUserDto newUser, UserContext dbContext, IMemoryCache cache) =>
+        {
+            User user = newUser.ToEntity();
+            dbContext.Users.Add(user);
+            dbContext.SaveChanges();
 
-      return group;
-   }
+            string cacheKey = $"user_{user.Id}";
+            cache.Set(cacheKey, user, new MemoryCacheEntryOptions().SetAbsoluteExpiration(TimeSpan.FromMinutes(10)));
 
+            cache.Remove(UsersCacheKey);
+
+            return Results.Created($"/users/{user.Id}", user);
+        });
+
+        group.MapDelete("/{id}", (int id, UserContext dbContext, IMemoryCache cache) =>
+        {
+            var user = dbContext.Users.Find(id);
+            if (user is null) return Results.NotFound();
+
+            dbContext.Users.Remove(user);
+            dbContext.SaveChanges();
+
+            cache.Remove($"user_{id}");
+            cache.Remove(UsersCacheKey);
+
+            return Results.NoContent();
+        });
+
+        return group;
+    }
 }

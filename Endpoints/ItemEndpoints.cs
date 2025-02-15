@@ -3,6 +3,7 @@ using BakeMart.Dtos.ItemDtos;
 using BakeMart.Entities;
 using BakeMart.Mapping;
 using BakeMart.Common;
+using Microsoft.AspNetCore.Authorization;
 
 namespace BakeMart.Endpoints;
 
@@ -15,7 +16,7 @@ public static class ItemEndpoints
     {
         var group = app.MapGroup("items").AddEndpointFilter<ExceptionFilter>();
 
-        group.MapGet("/{id:int}", (int id, ItemContext dbContext) =>
+        group.MapGet("/{id:int}",[Authorize(Roles = "Admin, User")] (int id, ItemContext dbContext) =>
         {
             var item = dbContext.Items.Find(id);
             if (item is null) return Results.NotFound();
@@ -23,7 +24,7 @@ public static class ItemEndpoints
             return Results.Ok(item);
         }).WithName(GetItemById);
 
-        group.MapPost("/create", (CreateItemDto newItem, ItemContext dbContext) =>
+        group.MapPost("/create",[Authorize(Roles = "Admin")] (CreateItemDto newItem, ItemContext dbContext) =>
         {
             Item item = newItem.ToEntity();
             dbContext.Items.Add(item);
@@ -32,7 +33,7 @@ public static class ItemEndpoints
             return Results.Created($"/items/{item.Id}", item);
         }).WithName(CreateItem);
 
-        group.MapDelete("/{id:int}", (int id, ItemContext dbContext) =>
+        group.MapDelete("/{id:int}", [Authorize(Roles = "Admin")](int id, ItemContext dbContext) =>
         {
             var item = dbContext.Items.Find(id);
             if (item is null) return Results.NotFound();
@@ -43,7 +44,7 @@ public static class ItemEndpoints
             return Results.NoContent();
         }).WithName("DeleteItem");
 
-        group.MapPut("/{id:int}", (int id, UpdateItemDto updatedItem, ItemContext dbContext) =>
+        group.MapPut("/{id:int}",[Authorize(Roles = "Admin")] (int id, UpdateItemDto updatedItem, ItemContext dbContext) =>
         {
             var item = dbContext.Items.Find(id);
             if (item is null) return Results.NotFound();

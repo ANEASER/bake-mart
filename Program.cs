@@ -11,5 +11,6 @@ builder.Services.AddMemoryCache();
 var app = builder.Build();
 
 app.MapUserEndpoints();
+app.MapItemEndpoints();
 
 app.Run();

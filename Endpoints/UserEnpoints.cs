@@ -2,7 +2,6 @@ using BakeMart.Data;
 using BakeMart.Dtos.UserDtos;
 using BakeMart.Entities;
 using BakeMart.Mapping;
-using Microsoft.Extensions.Caching.Memory;
 using BakeMart.Common;
 
 namespace BakeMart.Endpoints;
@@ -11,44 +10,31 @@ public static class UserEndpoints
 {
     const string GetUserById = "GetUserById";
     const string CreateUser = "CreateUser";
-    const string UsersCacheKey = "users_list"; 
+    const string UpdateUser = "UpdateUser";
+    const string DeleteUser = "DeleteUser";
+
     public static RouteGroupBuilder MapUserEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("users").AddEndpointFilter<ExceptionFilter>();
 
-        group.MapGet("/{id:int}", (int id, UserContext dbContext, IMemoryCache cache) =>
+        group.MapGet("/{id:int}", (int id, UserContext dbContext) =>
         {
-            string cacheKey = $"user_{id}";
-
-            if (!cache.TryGetValue(cacheKey, out User? user))
-            {
-                user = dbContext.Users.Find(id);
-                if (user is null) return Results.NotFound();
-
-                var cacheOptions = new MemoryCacheEntryOptions()
-                    .SetAbsoluteExpiration(TimeSpan.FromMinutes(10));
-
-                cache.Set(cacheKey, user, cacheOptions);
-            }
+            var user = dbContext.Users.Find(id);
+            if (user is null) return Results.NotFound();
 
             return Results.Ok(user);
         }).WithName(GetUserById);
 
-        group.MapPost("/create", (CreateUserDto newUser, UserContext dbContext, IMemoryCache cache) =>
+        group.MapPost("/create", (CreateUserDto newUser, UserContext dbContext) =>
         {
             User user = newUser.ToEntity();
             dbContext.Users.Add(user);
             dbContext.SaveChanges();
 
-            string cacheKey = $"user_{user.Id}";
-            cache.Set(cacheKey, user, new MemoryCacheEntryOptions().SetAbsoluteExpiration(TimeSpan.FromMinutes(10)));
-
-            cache.Remove(UsersCacheKey);
-
             return Results.Created($"/users/{user.Id}", user);
-        });
+        }).WithName(CreateUser);
 
-        group.MapDelete("/{id:int}", (int id, UserContext dbContext, IMemoryCache cache) =>
+        group.MapDelete("/{id:int}", (int id, UserContext dbContext) =>
         {
             var user = dbContext.Users.Find(id);
             if (user is null) return Results.NotFound();
@@ -56,11 +42,8 @@ public static class UserEndpoints
             dbContext.Users.Remove(user);
             dbContext.SaveChanges();
 
-            cache.Remove($"user_{id}");
-            cache.Remove(UsersCacheKey);
-
             return Results.NoContent();
-        });
+        }).WithName(DeleteUser);
 
         return group;
     }
